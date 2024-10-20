@@ -4,11 +4,11 @@ INDICATORS
 -- rsi
 -- atr
 -- cmf
+-- macd
+-- bollinger bands
 
 2. incorects Indicators
--- bollinger bands (proche)
 -- psar (pas assez sensible)
--- macd (proche)
 
 INDICATORS TO IMPLEMENT
 -- ADX

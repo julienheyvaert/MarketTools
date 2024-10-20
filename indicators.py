@@ -222,8 +222,9 @@ def bollinger_bands(series, window=20, num_std_dev=2, proximity_threshold= 0.02)
     elif not isinstance(series, pd.Series):
         raise ValueError('Error, series must be a pandas.Series or a python List.')
     
+    # sma, sd
     bb_sma = moving_average(series, window=window)
-    bb_sd = series.rolling(window=window).std()
+    bb_sd = series.rolling(window=window).std(ddof=0)
 
     # Bands Calculation
     bb_upper_band = bb_sma + bb_sd * num_std_dev
