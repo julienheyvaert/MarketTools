@@ -175,10 +175,10 @@ def rsi(series, period=14):
     
     return rsi
 
-def macd(prices_data, short_ema_period=12, long_ema_period=26, signal_line_period=9):
+def macd(prices, short_ema_period=12, long_ema_period=26, signal_line_period=9):
     """
     input : 
-        - prices_data : pandas.series or python list.
+        - prices : pandas.series or python list.
         - short_ema_period, long_ema_period, signal_line_period : integers.
     
     output:
@@ -187,13 +187,13 @@ def macd(prices_data, short_ema_period=12, long_ema_period=26, signal_line_perio
             -- [macd_signal_line] = macd signal line value
             -- [macd_hist] = macd - signal line
     """
-    if isinstance(prices_data, list):
-            prices_data = pd.Series(prices_data)
-    elif not isinstance(prices_data, pd.Series):
+    if isinstance(prices, list):
+            prices = pd.Series(prices)
+    elif not isinstance(prices, pd.Series):
         raise ValueError('Error, series must be a pandas.Series or a python List.')
     
-    macd_short_ema = moving_average(prices_data, window=short_ema_period, exponential=True)
-    macd_long_ema = moving_average(prices_data, window=long_ema_period, exponential=True)
+    macd_short_ema = moving_average(prices, window=short_ema_period, exponential=True)
+    macd_long_ema = moving_average(prices, window=long_ema_period, exponential=True)
     macd = macd_short_ema - macd_long_ema
     
     macd_signal_line = moving_average(macd, window=signal_line_period, exponential=True)
@@ -256,80 +256,6 @@ def bollinger_bands(series, window=20, num_std_dev=2, proximity_threshold= 0.02)
 
     return bb_df
 
-def o_psar(prices_close, prices_high, prices_low, start=0.02, increment=0.02, maximum=0.2):
-    """
-    input :
-        - prices_close, prices_high, prices_low : pandas.Series or python list.
-        - start, increment, maximum = float.
-    
-    output:
-        - psar_df : pandas.DataFrame,
-            -- ['psar'] = psar value.
-            -- ['psar_position'] = 1 if bullish trend inversion, ... -1, O if no trend inversion.
-    """
-    if isinstance(prices_close, list):
-         prices_close = pd.Series(prices_close)
-
-    if isinstance(prices_high, list):
-         prices_high = pd.Series(prices_high)
-
-    if isinstance(prices_low, list):
-         prices_low = pd.Series(prices_low)
-    
-    if not isinstance(prices_close, pd.Series) or not isinstance(prices_high, pd.Series) or not isinstance(prices_low, pd.Series):
-        raise ValueError('Error, prices data must be pandas.Series or python lists.')
-    
-    if len(prices_close) != len(prices_high) != len(prices_low):
-        raise ValueError('Error, prices data must have the same length.')
-    
-    # Initialization
-    n = len(prices_close)
-    psar = np.zeros(n)
-    ep = prices_high.iloc[0]
-    af = start
-    bullish = True
-    psar[0] = prices_low.iloc[0]
-    psar_position = np.zeros(n)
-
-    for i in range(1, n):
-        if bullish:
-            psar[i] = psar[i - 1] + af * (ep - psar[i - 1])
-
-            # ep, af update
-            if prices_high.iloc[i] > ep:
-                ep = prices_high.iloc[i]
-                af = min(af + increment, maximum)
-
-            # Trend inversion
-            if prices_close.iloc[i] < psar[i] and psar_position[i-1] != -1:
-                bullish = False
-                psar[i] = ep
-                ep = prices_low.iloc[i]
-                af = start
-                psar_position[i] = -1
-
-        else:
-            psar[i] = psar[i - 1] + af * (ep - psar[i - 1])
-
-            # ep, af update
-            if prices_low.iloc[i] < ep:
-                ep = prices_low.iloc[i]
-                af = min(af + increment, maximum)
-
-            # Trend inversion
-            if prices_close.iloc[i] > psar[i] and psar_position[i-1] != 1:
-                bullish = True
-                psar[i] = ep
-                ep = prices_high.iloc[i]
-                af = start
-                psar_position[i] = 1
-    
-    psar_df = pd.DataFrame({
-        'psar': psar,
-        'psar_position' : psar_position
-    },index=prices_close.index)
-    return psar_df
-
 def stochastic_oscillator(close, high, low, K_length=14, K_smoothing=1, D_smoothing=3):
     """
     input:
@@ -362,14 +288,14 @@ def stochastic_oscillator(close, high, low, K_length=14, K_smoothing=1, D_smooth
     
     return stoch_df
 
-def atr(prices_close, prices_high, prices_low, window=14):
-    if not isinstance(prices_close, pd.Series) or not isinstance(prices_close, pd.Series) \
-        or not isinstance(prices_low, pd.Series):
+def atr(close, high, low, window=14):
+    if not isinstance(close, pd.Series) or not isinstance(close, pd.Series) \
+        or not isinstance(low, pd.Series):
         raise ValueError('Error, prices data must be pandas.Series.')
     # TR
-    tr1 = prices_high - prices_low
-    tr2 = (prices_high - prices_close.shift(1)).abs()
-    tr3 = (prices_low - prices_close.shift(1)).abs()
+    tr1 = high - low
+    tr2 = (high - close.shift(1)).abs()
+    tr3 = (low - close.shift(1)).abs()
     
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
     
