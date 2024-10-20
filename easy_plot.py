@@ -61,8 +61,8 @@ class PlotManager:
         plt.savefig(filepath)
 
 if __name__ == "__main__":
-    ticker1 = 'AAPL'
-    start_date = '2024-09-01'
+    ticker1 = 'BTC-USD'
+    start_date = '2024-09-30'
     market_data = fetch_market_data(ticker1, start_date)
 
     plot_manager = PlotManager(title='TA Plot', x_label='Dates', y_label='Prices')
@@ -86,9 +86,9 @@ if __name__ == "__main__":
         psar_data = psar(series_close, series_high, series_low)
         plot_manager.add_plot(psar_data['psar'], plot_type='scatter', color='grey', label='Parabolic SAR', scatter_size=3)
 
-        psar_bullish = psar_data[psar_data['psar_position'] == 1]['psar']
+        psar_bullish = psar_data[psar_data['psar_position'] == -1]['psar']
         plot_manager.add_plot(psar_bullish, plot_type='scatter', color='green', label='Parabolic SAR', scatter_marker='^')
-        psar_bearish = psar_data[psar_data['psar_position'] == -1]['psar']
+        psar_bearish = psar_data[psar_data['psar_position'] == 1]['psar']
         plot_manager.add_plot(psar_bearish, plot_type='scatter', color='red', label='Parabolic SAR', scatter_marker='v')
 
         psar_position = psar_data[psar_data['psar_position'] != 0]

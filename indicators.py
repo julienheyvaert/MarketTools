@@ -256,7 +256,7 @@ def bollinger_bands(series, window=20, num_std_dev=2, proximity_threshold= 0.02)
 
     return bb_df
 
-def psar(prices_close, prices_high, prices_low, start=0.02, increment=0.03, maximum=0.2):
+def o_psar(prices_close, prices_high, prices_low, start=0.02, increment=0.02, maximum=0.2):
     """
     input :
         - prices_close, prices_high, prices_low : pandas.Series or python list.
@@ -384,26 +384,76 @@ def atr(prices_close, prices_high, prices_low, window=14):
     
     return atr
 
-def cmf(prices_close, prices_high, prices_low, volumes, window=21):
-    if not isinstance(prices_close, pd.Series) or not isinstance(prices_high, pd.Series) \
-        or not isinstance(prices_low, pd.Series) or not isinstance(volumes, pd.Series):
+def cmf(close, high, low, volumes, window=21):
+    if not isinstance(close, pd.Series) or not isinstance(high, pd.Series) \
+        or not isinstance(low, pd.Series) or not isinstance(volumes, pd.Series):
         raise ValueError('Error, prices data and volumes must be pandas.Series (not dataframes).')
     
-    if not (len(prices_close) == len(prices_high) == len(prices_low) == len(volumes)):
+    if not (len(close) == len(high) == len(low) == len(volumes)):
         raise ValueError("Error, prices data must have same length.")
 
     # Close Location Value (CLV)
-    clv = (prices_close - prices_low) - (prices_high - prices_close)
-    clv /= (prices_high - prices_low)
+    clv = (close - low) - (high - close)
+    clv /= (high - low)
 
     # Chaikin Money Flow
-    cmf = np.array([0.0] * len(prices_close))
+    cmf = np.array([0.0] * len(close))
 
-    for i in range(window - 1, len(prices_close)):
+    for i in range(window - 1, len(close)):
         sum_clv_volume = np.sum(clv[i - window + 1:i + 1] * volumes[i - window + 1:i + 1])
         sum_volume = np.sum(volumes[i - window + 1:i + 1])
         cmf[i] = sum_clv_volume / sum_volume if sum_volume != 0 else 0
 
-    cmf = pd.Series(cmf, index=prices_close.index, name = 'CMF')
+    cmf = pd.Series(cmf, index=close.index, name = 'CMF')
     
     return cmf
+
+def psar(close, high, low, start_af=0.02, increment=0.02, max_af=0.2):
+    # initialisation
+    n = len(close)
+    psar = np.zeros(n)
+    psar[0] = low[0]
+    trend = 1
+    ep = high[0]
+    af = start_af
+    psar_position = np.zeros(n)
+
+    for i in range(1, n):
+        # psar
+        psar[i] = psar[i-1] + af * (ep - psar[i-1])
+
+        if trend == 1:
+            # trend reverse verifiatcion
+            if psar[i] > low[i]:
+                psar[i] = ep
+                trend = -1
+                ep = low[i]
+                af = start_af
+                # psar position
+                psar_position[i] = 1
+            else:
+                # ep, af update
+                if high[i] > ep:
+                    ep = high[i]
+                    af = min(af + increment, max_af)
+
+        else:
+            # trend reverse verifiatcion
+            if psar[i] < high[i]:
+                psar[i] = ep
+                trend = 1
+                ep = high[i]
+                af = start_af
+                psar_position[i] = -1
+            else:
+                # ep, af update
+                if low[i] < ep:
+                    ep = low[i]
+                    af = min(af + increment, max_af)
+
+    psar_df = pd.DataFrame({
+        'psar': psar,
+        'psar_position': psar_position
+    }, index=close.index)
+
+    return psar_df

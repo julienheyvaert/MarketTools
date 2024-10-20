@@ -6,9 +6,7 @@ INDICATORS
 -- cmf
 -- macd
 -- bollinger bands
-
-2. incorects Indicators
--- psar (pas assez sensible)
+-- psar
 
 INDICATORS TO IMPLEMENT
 -- ADX
