@@ -1,30 +1,28 @@
 import numpy as np
 import pandas as pd
 
-def derivative_window(series, window=1):
+def to_series(data):
+    if isinstance(data, list):
+        return pd.Series(data)
+    if not isinstance(data, pd.Series):
+        raise ValueError("Error, input must be a pandas.Series or a python list.")
+    return data
+
+def derivative_window(series, window=3):
+    series = to_series(series)
+    if not isinstance(window, int):
+        raise ValueError("Error, window must be an integer.")
     return series.diff().rolling(window=window).mean()
 
 def since_critical(series, check_values):
     """
-    Input : - series, a column of pandas dataframe or a list
-            - check_values, python list of numeric values
-    
-    Output: - since_critical_result, a pandas dataframe (date, result).
-
-    When a value in the series is the same as a value in the check_values list, 
-    start counting the number of iterations since the last value that appears in the check_values list.
-
-    ex: series = [3,6,8,1,9,4,3,5,4,1,5,6], check_values = [1,6]
-    output = [nan,0,1,0,1,2,3,4,5,0,1,0]
+    Count steps since last critical value.
+    ex: series=[3,6,8,1,9,4,3,5,4,1,5,6], check_values=[1,6]
+    output=    [NaN,0,1,0,1,2,3,4,5,0,1,0]
     """
-    
+    series = to_series(series)
     if not check_values:
-        raise ValueError('Error : check_values.')
-    
-    if isinstance(series, list):
-            series = pd.Series(series)
-    elif not isinstance(series, pd.Series):
-        raise ValueError("Error, series must be a pandas.Series or a python list.")
+        raise ValueError("Error: check_values is empty.")
 
     n = len(series)
     count = np.nan
@@ -35,131 +33,75 @@ def since_critical(series, check_values):
             count = 0
         elif pd.notna(count):
             count += 1
-        
         since_critical_result.iloc[i] = count
-    
+
     return since_critical_result
 
-def find_extremums(series, window=5):
-    """
-    input : 
-        - series, pandas.Series or a list
-        - window, int
-    
-    output :
-        - extremums, pandas.DataFrame :
-            -- ['extremum_value'] : if is extremum, the price value, else : nan
-            -- ['extremum_type'] : maximum = 1, minimum = -1, neither = 0
-    """
+def moving_average(series, window=21, exponential=False):
     if isinstance(series, list):
-            series = pd.Series(series)
-    elif not isinstance(series, pd.Series):
+        series = pd.Series(series)
+
+    if not isinstance(series, pd.Series):
         raise ValueError("Error, series must be a pandas.Series or a python list.")
-    if not isinstance(window, int):
-        raise ValueError('Error, window must be an integer.')
-
-    # Initialisation
-    extremums = pd.DataFrame(index=series.index, columns=['extremum_value', 'extremum_type'])
-    extremums['extremum_value'] = np.nan
-    extremums['extremum_type'] = 0
-
-    # Extremums (rolling window)
-    rolling_min = series.rolling(window=window, center=True).min()
-    rolling_max = series.rolling(window=window, center=True).max()
-
-    # Identify local maxima
-    maxima_mask = (series == rolling_max) & (series.notna())
-    extremums.loc[maxima_mask, 'extremum_value'] = series[maxima_mask]
-    extremums.loc[maxima_mask, 'extremum_type'] = 1
-
-    # Identify local minima
-    minima_mask = (series == rolling_min) & (series.notna())
-    extremums.loc[minima_mask, 'extremum_value'] = series[minima_mask]
-    extremums.loc[minima_mask, 'extremum_type'] = -1
-
-    # last window
-    last_window_max = series[-window:].max()
-    last_window_min = series[-window:].min()
-    last_value = series.iloc[-1]
-
-    if last_window_max:
-        extremums.loc[series.index[-1], 'extremum_value'] = last_value
-        extremums.loc[series.index[-1], 'extremum_type'] = 1  # Maximum
-
-    elif last_window_min:
-        extremums.loc[series.index[-1], 'extremum_value'] = last_value
-        extremums.loc[series.index[-1], 'extremum_type'] = -1
-
-    return extremums
-
-def moving_average(series, window = 21, exponential = False):
-    """
-    input : 
-        - data : pandas.Series or a list.
-        - window : int,
-        - exponential : boolean
     
-    output :
-        - moving_average : pandas.Series
-    """
-    if isinstance(series, list):
-            series = pd.Series(series)
-    elif not isinstance(series, pd.Series):
-        raise ValueError('Error, series must be a pandas.Series or a python List.')
-
     if not isinstance(window, int):
-        raise ValueError('Error, window must be an integer.')
+        raise ValueError("Error, window must be an integer.")
     
     if len(series) <= window:
-        raise ValueError('Not enough data for window value.')
+        raise ValueError("Not enough data for window value.")
     
     if exponential:
-        moving_average = series.ewm(span=window, adjust=False).mean()
+        return series.ewm(span=window, adjust=False).mean()
     else:
-        moving_average = series.rolling(window=window).mean()
-    return moving_average
+        return series.rolling(window=window).mean()
 
 def crossovers(series1, series2):
     """
-    input :
-        - series1, series2 : pandas.Series or list.
-    output :
-        - crossover_series : if series1 passes above series 2 = 1, ... = -1, 0 if no crossover
+    Output:
+        1  → series1 crosses ABOVE series2
+       -1  → series1 crosses BELOW series2
+        0  → no crossover
     """
-    if isinstance(series1, list):
-            series1 = pd.Series(series1)
-    elif not isinstance(series1, pd.Series):
-        raise ValueError('Error, series must be a pandas.Series or a python List.')
-    
-    if isinstance(series2, list):
-            series2 = pd.Series(series2)
-    elif not isinstance(series2, pd.Series):
-        raise ValueError('Error, series must be a pandas.Series or a python List.')
-    
+    series1 = to_series(series1)
+    series2 = to_series(series2)
+
     if len(series1) != len(series2):
-        raise ValueError("The series provided have different lengths")
+        raise ValueError("The series provided have different lengths.")
 
     delta = series1 - series2
-    s1_above_s2 = np.where(delta > 0, 1, 0)
-    crossover = np.diff(s1_above_s2, prepend=0)
-    crossover_series = pd.Series(crossover, index=series1.index)
 
-    return crossover_series
+    above = (delta > 0).astype(int)
+    prev  = above.shift(1)
+
+    crossover = (above - prev).fillna(0)
+
+    return crossover.astype(int)
+
+def find_extremums(series, window=5):
+    series = to_series(series)
+
+    if not isinstance(window, int):
+        raise ValueError("Error, window must be an integer.")
+
+    extremums = pd.DataFrame({"extremum_value": np.nan, "extremum_type": 0}, index=series.index)
+
+    # center=False — only looks at past bars, works correctly on recent data
+    rolling_min = series.rolling(window=window, center=False).min()
+    rolling_max = series.rolling(window=window, center=False).max()
+
+    minima_mask = (series == rolling_min) & (series.notna())
+    extremums.loc[minima_mask, "extremum_value"] = series[minima_mask]
+    extremums.loc[minima_mask, "extremum_type"] = -1
+
+    maxima_mask = (series == rolling_max) & (series.notna())
+    extremums.loc[maxima_mask, "extremum_value"] = series[maxima_mask]
+    extremums.loc[maxima_mask, "extremum_type"] = 1
+
+    return extremums
 
 def rsi(series, period=14):
-    """
-    input:
-        - series : pandas.Series or python list.
-        - period : integer
-    
-    output:
-        - rsi : pandas.Series
-    """
-    if isinstance(series, list):
-            series = pd.Series(series)
-    elif not isinstance(series, pd.Series):
-        raise ValueError('Error, series must be a pandas.Series or a python List.')
-    
+    series = to_series(series)
+
     if not isinstance(period, int):
          raise ValueError('Error, period must be an integer.')
     
@@ -187,10 +129,7 @@ def macd(prices, short_ema_period=12, long_ema_period=26, signal_line_period=9):
             -- [macd_signal_line] = macd signal line value
             -- [macd_hist] = macd - signal line
     """
-    if isinstance(prices, list):
-            prices = pd.Series(prices)
-    elif not isinstance(prices, pd.Series):
-        raise ValueError('Error, series must be a pandas.Series or a python List.')
+    prices = to_series(prices)
     
     macd_short_ema = moving_average(prices, window=short_ema_period, exponential=True)
     macd_long_ema = moving_average(prices, window=long_ema_period, exponential=True)
@@ -207,179 +146,172 @@ def macd(prices, short_ema_period=12, long_ema_period=26, signal_line_period=9):
 
     return macd_df
 
-def bollinger_bands(series, window=20, num_std_dev=2, proximity_threshold= 0.02):
-    """
-    input:
-        - series : pandas.Series or python list.
-        - window, num_std_dev : integers.
-        - proximity_treshold : float.
+def bollinger_bands(series, window=20, num_std_dev=2, proximity_threshold=0.02):
+    series = to_series(series)
+    if not isinstance(window, int):
+        raise ValueError("Error, window must be an integer.")
+    if not isinstance(num_std_dev, int):
+        raise ValueError("Error, num_std_dev must be an integer.")
+    if not isinstance(proximity_threshold, float):
+        raise ValueError("Error, proximity_threshold must be a float.")
 
-    output:
-        - bb_df = pandas.DataFrame
-    """
-    if isinstance(series, list):
-            series = pd.Series(series)
-    elif not isinstance(series, pd.Series):
-        raise ValueError('Error, series must be a pandas.Series or a python List.')
-    
-    # sma, sd
     bb_sma = moving_average(series, window=window)
     bb_sd = series.rolling(window=window).std(ddof=0)
 
-    # Bands Calculation
     bb_upper_band = bb_sma + bb_sd * num_std_dev
     bb_lower_band = bb_sma - bb_sd * num_std_dev
 
-    # Bands vs Price
-    bb_price_proximity = np.where(series >= bb_upper_band * (1 - proximity_threshold), 1, 0)
-    bb_price_proximity = np.where(series <= bb_lower_band * (1 + proximity_threshold), -1, 0)
+    conditions = [
+        series >= bb_upper_band * (1 - proximity_threshold),
+        series <= bb_lower_band * (1 + proximity_threshold)
+    ]
+    bb_price_proximity = np.select(conditions, [1, -1], default=0)
 
-    # Bands vs Prices Crossover
-    bb_price_crossover = crossovers(series, bb_upper_band)
+    bb_upper_crossover = crossovers(series, bb_upper_band)
+    bb_lower_crossover = crossovers(series, bb_lower_band)
 
-    # Bands slopes
     bb_up_slope = derivative_window(bb_upper_band)
     bb_low_slope = derivative_window(bb_lower_band)
 
-    # Bands squeeze
-    bb_squeeze = -find_extremums(bb_upper_band)['extremum_type']
+    bb_squeeze = -find_extremums(bb_upper_band)["extremum_type"]
 
-    bb_df = pd.DataFrame({
-        'bb_upper_band': bb_upper_band,
-        'bb_lower_band' : bb_lower_band,
-        'bb_price_proximity' : bb_price_proximity,
-        'bb_up_slope' : bb_up_slope,
-        'bb_low_slope' : bb_low_slope,
-        'bb_price_crossover' : bb_price_crossover,
-        'bb_squeeze' : bb_squeeze
+    return pd.DataFrame({
+        "bb_upper_band": bb_upper_band,
+        "bb_lower_band": bb_lower_band,
+        "bb_price_proximity": bb_price_proximity,
+        "bb_upper_crossover": bb_upper_crossover,
+        "bb_lower_crossover": bb_lower_crossover,
+        "bb_up_slope": bb_up_slope,
+        "bb_low_slope": bb_low_slope,
+        "bb_squeeze": bb_squeeze
     })
-
-    return bb_df
 
 def stochastic_oscillator(close, high, low, K_length=14, K_smoothing=1, D_smoothing=3):
     """
     input:
-        - close, high, low = pandas.DataFrame.
-        - K_length, K_smoothing, D_smoothing = int.
-
+        - close, high, low: pandas.Series
+        - K_length, K_smoothing, D_smoothing: int
     output:
-        - stoch_df = pandas.DataFrame
+        - stoch_df: pandas.DataFrame with %K and %D columns
     """
-    if not isinstance(close, pd.Series) or not isinstance(high, pd.Series) or not isinstance(low, pd.Series):
-        raise ValueError("Inputs must be pandas.Series for close, high, and low prices.")
-    
-    if len(close) != len(high) or len(close) != len(low):
-        raise ValueError("The series must have the same length.")
+    close = to_series(close)
+    high = to_series(high)
+    low = to_series(low)
+
+    for param, name in [(K_length, "K_length"), (K_smoothing, "K_smoothing"), (D_smoothing, "D_smoothing")]:
+        if not isinstance(param, int):
+            raise ValueError(f"Error, {name} must be an integer.")
+
+    if not (len(close) == len(high) == len(low)):
+        raise ValueError("close, high and low must have the same length.")
 
     low_min = low.rolling(window=K_length).min()
     high_max = high.rolling(window=K_length).max()
-    
-    # %K
+
     stoch_k = (close - low_min) / (high_max - low_min) * 100
     stoch_k_smooth = stoch_k.rolling(window=K_smoothing).mean()
-
-    # %D
     stoch_d = stoch_k_smooth.rolling(window=D_smoothing).mean()
-    
-    stoch_df = pd.DataFrame({
-        '%K': stoch_k_smooth,
-        '%D': stoch_d
-    }).dropna()
-    
-    return stoch_df
+
+    return pd.DataFrame({
+        "%K": stoch_k_smooth,
+        "%D": stoch_d
+    })
 
 def atr(close, high, low, window=14):
-    if not isinstance(close, pd.Series) or not isinstance(close, pd.Series) \
-        or not isinstance(low, pd.Series):
-        raise ValueError('Error, prices data must be pandas.Series.')
-    # TR
+    """
+    Calculate Average True Range (ATR).
+    Measures market volatility.
+    """
+    close = to_series(close)
+    high = to_series(high)
+    low = to_series(low)
+
+    if not isinstance(window, int):
+        raise ValueError("Error, window must be an integer.")
+    if not (len(close) == len(high) == len(low)):
+        raise ValueError("close, high and low must have the same length.")
+
     tr1 = high - low
     tr2 = (high - close.shift(1)).abs()
     tr3 = (low - close.shift(1)).abs()
-    
+
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    
-    # ATR first value
-    atr_sma = tr.rolling(window=window).mean()
-    atr = pd.Series(index=tr.index, dtype='float64')
-    atr.iloc[window - 1] = atr_sma.iloc[window - 1]
-    
-    # ATR values
-    for i in range(window, len(tr)):
-        atr.iloc[i] = (atr.iloc[i-1] * (window - 1) + tr.iloc[i]) / window
-    
-    return atr
+
+    return tr.ewm(alpha=1/window, adjust=False).mean()
 
 def cmf(close, high, low, volumes, window=21):
-    if not isinstance(close, pd.Series) or not isinstance(high, pd.Series) \
-        or not isinstance(low, pd.Series) or not isinstance(volumes, pd.Series):
-        raise ValueError('Error, prices data and volumes must be pandas.Series (not dataframes).')
-    
+    """
+    Chaikin Money Flow (CMF).
+    Measures buying and selling pressure using price and volume.
+    CMF > 0 = money flowing in, CMF < 0 = money flowing out.
+    """
+    close = to_series(close)
+    high = to_series(high)
+    low = to_series(low)
+    volumes = to_series(volumes)
+
+    if not isinstance(window, int):
+        raise ValueError("Error, window must be an integer.")
     if not (len(close) == len(high) == len(low) == len(volumes)):
-        raise ValueError("Error, prices data must have same length.")
+        raise ValueError("Error, all series must have the same length.")
 
-    # Close Location Value (CLV)
-    clv = (close - low) - (high - close)
-    clv /= (high - low)
+    clv = ((close - low) - (high - close)) / (high - low)
 
-    # Chaikin Money Flow
-    cmf = np.array([0.0] * len(close))
+    clv_volume = clv * volumes
+    result = clv_volume.rolling(window=window).sum() / volumes.rolling(window=window).sum()
 
-    for i in range(window - 1, len(close)):
-        sum_clv_volume = np.sum(clv[i - window + 1:i + 1] * volumes[i - window + 1:i + 1])
-        sum_volume = np.sum(volumes[i - window + 1:i + 1])
-        cmf[i] = sum_clv_volume / sum_volume if sum_volume != 0 else 0
-
-    cmf = pd.Series(cmf, index=close.index, name = 'CMF')
-    
-    return cmf
+    return result
 
 def psar(close, high, low, start_af=0.02, increment=0.02, max_af=0.2):
-    # initialisation
+    """
+    Parabolic SAR.
+    Dots below price = uptrend, dots above price = downtrend.
+    Signal of 1 = trend turned bullish, -1 = trend turned bearish.
+    """
+    close = to_series(close)
+    high = to_series(high)
+    low = to_series(low)
+
+    if not (len(close) == len(high) == len(low)):
+        raise ValueError("close, high and low must have the same length.")
+    if not isinstance(start_af, float) or not isinstance(increment, float) or not isinstance(max_af, float):
+        raise ValueError("start_af, increment and max_af must be floats.")
+
     n = len(close)
-    psar = np.zeros(n)
-    psar[0] = low[0]
+    psar_values = np.zeros(n)
+    psar_values[0] = low.iloc[0]
     trend = 1
-    ep = high[0]
+    ep = high.iloc[0]
     af = start_af
     psar_position = np.zeros(n)
 
     for i in range(1, n):
-        # psar
-        psar[i] = psar[i-1] + af * (ep - psar[i-1])
+        psar_values[i] = psar_values[i-1] + af * (ep - psar_values[i-1])
 
         if trend == 1:
-            # trend reverse verifiatcion
-            if psar[i] > low[i]:
-                psar[i] = ep
+            if psar_values[i] > low.iloc[i]:
+                psar_values[i] = ep
                 trend = -1
-                ep = low[i]
-                af = start_af
-                # psar position
-                psar_position[i] = 1
-            else:
-                # ep, af update
-                if high[i] > ep:
-                    ep = high[i]
-                    af = min(af + increment, max_af)
-
-        else:
-            # trend reverse verifiatcion
-            if psar[i] < high[i]:
-                psar[i] = ep
-                trend = 1
-                ep = high[i]
+                ep = low.iloc[i]
                 af = start_af
                 psar_position[i] = -1
             else:
-                # ep, af update
-                if low[i] < ep:
-                    ep = low[i]
+                if high.iloc[i] > ep:
+                    ep = high.iloc[i]
+                    af = min(af + increment, max_af)
+        else:
+            if psar_values[i] < high.iloc[i]:
+                psar_values[i] = ep
+                trend = 1
+                ep = high.iloc[i]
+                af = start_af
+                psar_position[i] = 1
+            else:
+                if low.iloc[i] < ep:
+                    ep = low.iloc[i]
                     af = min(af + increment, max_af)
 
-    psar_df = pd.DataFrame({
-        'psar': psar,
-        'psar_position': psar_position
+    return pd.DataFrame({
+        "psar": psar_values,
+        "psar_position": psar_position
     }, index=close.index)
-
-    return psar_df
